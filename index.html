@@ -164,6 +164,7 @@ $('signup').addEventListener('click', async () => {
   if (!email || password.length < 6) { showLogin('Enter an email and a password of at least 6 characters.'); return; }
   try {
 const d = await authCall('signup?redirect_to=' + encodeURIComponent('https://roldinee.github.io/field-map/'), { email, password });    if (d.access_token) { setSession(d); $('password').value = ''; start(); }
+      if (d.access_token) { setSession(d); $('password').value = ''; start(); }
     else showLogin('Account created. Check your email to confirm it, then sign in.', true);
   } catch (err) { showLogin(err.message); }
 });
