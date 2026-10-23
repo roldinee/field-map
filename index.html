@@ -187,8 +187,8 @@ $('signup').addEventListener('click', async () => {
   const email = $('email').value.trim(), password = $('password').value;
   if (!email || password.length < 6) { showLogin('Enter an email and a password of at least 6 characters.'); return; }
   try {
-const d = await authCall('signup?redirect_to=' + encodeURIComponent('https://roldinee.github.io/field-map/'), { email, password });    if (d.access_token) { setSession(d); $('password').value = ''; start(); }
-      if (d.access_token) { setSession(d); $('password').value = ''; start(); }
+    const d = await authCall('signup?redirect_to=' + encodeURIComponent('https://roldinee.github.io/field-map/'), { email, password });
+    if (d.access_token) { setSession(d); $('password').value = ''; start(); }
     else showLogin('Account created. Check your email to confirm it, then sign in.', true);
   } catch (err) { showLogin(err.message); }
 });
@@ -301,11 +301,12 @@ function render(obs, fit) {
 $('reset').onclick = () => { $('species').value = ''; $('from').value = ''; $('to').value = ''; apply(true); };
 $('refresh').onclick = () => loadAll(false);
 
-async function claimDevice(code) {
-  const call = () => fetch(`${SB_URL}/rest/v1/rpc/claim_device`, {
+// ---------- generic database function call ----------
+async function rpc(name, body) {
+  const call = () => fetch(`${SB_URL}/rest/v1/rpc/${name}`, {
     method: 'POST',
     headers: { apikey: SB_KEY, Authorization: 'Bearer ' + session.access_token, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ p_code: code })
+    body: JSON.stringify(body)
   });
   let r = await call();
   if (r.status === 401 && await refreshSession()) r = await call();
@@ -313,13 +314,14 @@ async function claimDevice(code) {
   return r.json();
 }
 
+// ---------- claim a device ----------
 $('claimBtn').onclick = async () => {
   const code = $('claimCode').value.trim();
   if (!code) { $('claimMsg').textContent = 'Enter the code printed on your device.'; return; }
   $('claimBtn').disabled = true;
   $('claimMsg').textContent = 'Checking...';
   try {
-    const res = await claimDevice(code);
+    const res = await rpc('claim_device', { p_code: code });
     if (res.ok) {
       $('claimCode').value = '';
       $('claimMsg').textContent = 'Added ' + res.name + '. Loading its catches...';
@@ -334,22 +336,8 @@ $('claimBtn').onclick = async () => {
   }
   $('claimBtn').disabled = false;
 };
-  
 
-async function rpc(name, body) {
-  const call = () => fetch(`${SB_URL}/rest/v1/rpc/${name}`, {
-    method: 'POST',
-    headers: { apikey: SB_KEY, Authorization: 'Bearer ' + session.access_token, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  });
-  let r = await call();
-  if (r.status === 401 && await refreshSession()) r = await call();
-  if (!r.ok) throw new Error('Could not reach the server.');
-  return r.json();
-}
-
-
-
+// ---------- device settings ----------
 async function loadDevices() {
   const call = () => fetch(`${SB_URL}/rest/v1/devices?select=device_id,device_name&order=registered_at`, {
     headers: { apikey: SB_KEY, Authorization: 'Bearer ' + session.access_token }
@@ -370,21 +358,7 @@ async function loadDevices() {
   if (list.length) loadDeviceSettings();
 }
 
-
-
-$('setDevice').onchange = loadDeviceSettings;
-
-
-  $('saveSettings').disabled = true;
-  $('setMsg').textContent = 'Saving...';
-  try {
-    const res = await rpc('save_settings', { p_device_id: $('setDevice').value, p_settings: settings });
-    $('setMsg').textContent = res.ok ? 'Saved. The unit picks it up next time it connects.' : res.message;
-    if (res.ok) loadDeviceSettings();
-  } catch (e) { $('setMsg').textContent = e.message; }
-  $('saveSettings').disabled = false;
-};
-  const DEFAULT_SP = ['Brown Trout', 'Rainbow Trout', 'Brook Trout', 'Cutthroat Trout'];
+const DEFAULT_SP = ['Brown Trout', 'Rainbow Trout', 'Brook Trout', 'Cutthroat Trout'];
 const SHORT_SP = ['Brown', 'Rainbow', 'Brook', 'Cutthroat'];
 
 async function loadSpeciesList() {
@@ -433,6 +407,8 @@ async function loadDeviceSettings() {
   $('setMsg').textContent = '';
 }
 
+$('setDevice').onchange = loadDeviceSettings;
+
 $('saveSettings').onclick = async () => {
   $('saveSettings').disabled = true;
   $('setMsg').textContent = 'Saving...';
@@ -464,13 +440,16 @@ $('saveSettings').onclick = async () => {
   } catch (e) { $('setMsg').textContent = e.message; }
   $('saveSettings').disabled = false;
 };
-  function start() {
+
+// ---------- start ----------
+function start() {
   if (!session) { showLogin(); return; }
   $('login').hidden = true;
   $('who').textContent = (session.user && session.user.email) || '';
   loadAll(true);
-    loadDevices();
+  loadDevices();
 }
+
 async function consumeEmailLink() {
   const h = new URLSearchParams(location.hash.slice(1));
   const at = h.get('access_token');
