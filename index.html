@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+  <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -89,6 +89,24 @@
   <button id="claimBtn" type="button">Add device</button>
 </div>
 <div id="claimMsg" style="font-size:12px;margin-top:4px"></div>
+    <details id="settingsBox" style="margin-top:10px" hidden>
+  <summary>Device settings</summary>
+  <select id="setDevice" style="width:100%;margin:6px 0"></select>
+  <div style="font-size:12px">Wi-Fi networks (tried in order)</div>
+  <div class="row"><input id="wifiSsid0" placeholder="Network name" style="flex:1"><input id="wifiPw0" type="password" autocomplete="new-password" style="flex:1"></div>
+  <div class="row"><input id="wifiSsid1" placeholder="Network name" style="flex:1"><input id="wifiPw1" type="password" autocomplete="new-password" style="flex:1"></div>
+  <div class="row"><input id="wifiSsid2" placeholder="Network name" style="flex:1"><input id="wifiPw2" type="password" autocomplete="new-password" style="flex:1"></div>
+  <div style="font-size:12px;margin-top:6px">Species for each button</div>
+  <div class="row"><label>1 <select id="btnSp0"></select></label><label>2 <select id="btnSp1"></select></label></div>
+  <div class="row"><label>3 <select id="btnSp2"></select></label><label>4 <select id="btnSp3"></select></label></div>
+  <div class="row" style="margin-top:6px">
+    <label>Upload every (s) <input id="setInterval" type="number" min="10" max="3600" value="30" style="width:70px"></label>
+    <label>LED brightness <input id="setLed" type="number" min="0" max="100" value="50" style="width:60px"></label>
+  </div>
+  <label style="display:block;margin-top:6px"><input id="setUploads" type="checkbox" checked> Uploads enabled</label>
+  <button id="saveSettings" type="button" style="margin-top:6px">Save settings</button>
+  <div id="setMsg" style="font-size:12px;margin-top:4px"></div>
+</details>
   </header>
   <div class="scroll">
     <section class="cards">
@@ -305,6 +323,7 @@ $('claimBtn').onclick = async () => {
       $('claimCode').value = '';
       $('claimMsg').textContent = 'Added ' + res.name + '. Loading its catches...';
       await loadAll(true);
+      loadDevices();
       $('claimMsg').textContent = 'Added ' + res.name + '.';
     } else {
       $('claimMsg').textContent = res.message;
@@ -314,11 +333,109 @@ $('claimBtn').onclick = async () => {
   }
   $('claimBtn').disabled = false;
 };
+  const SPECIES = [[1,'Brown'],[2,'Rainbow'],[3,'Brook'],[4,'Cutthroat']];
+
+async function rpc(name, body) {
+  const call = () => fetch(`${SB_URL}/rest/v1/rpc/${name}`, {
+    method: 'POST',
+    headers: { apikey: SB_KEY, Authorization: 'Bearer ' + session.access_token, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  let r = await call();
+  if (r.status === 401 && await refreshSession()) r = await call();
+  if (!r.ok) throw new Error('Could not reach the server.');
+  return r.json();
+}
+
+function fillSpecies() {
+  for (let i = 0; i < 4; i++) {
+    const sel = $('btnSp' + i);
+    sel.innerHTML = '';
+    SPECIES.forEach(([id, name]) => {
+      const o = document.createElement('option');
+      o.value = id; o.textContent = name; sel.appendChild(o);
+    });
+    sel.value = i + 1;
+  }
+}
+
+async function loadDevices() {
+  const call = () => fetch(`${SB_URL}/rest/v1/devices?select=device_id,device_name&order=registered_at`, {
+    headers: { apikey: SB_KEY, Authorization: 'Bearer ' + session.access_token }
+  });
+  let r = await call();
+  if (r.status === 401 && await refreshSession()) r = await call();
+  if (!r.ok) return;
+  const list = await r.json();
+  const sel = $('setDevice');
+  sel.innerHTML = '';
+  list.forEach(d => {
+    const o = document.createElement('option');
+    o.value = d.device_id;
+    o.textContent = d.device_name || d.device_id.slice(0, 8);
+    sel.appendChild(o);
+  });
+  $('settingsBox').hidden = list.length === 0;
+  if (list.length) loadDeviceSettings();
+}
+
+async function loadDeviceSettings() {
+  fillSpecies();
+  $('setInterval').value = 30; $('setLed').value = 50; $('setUploads').checked = true;
+  let s = null;
+  try { s = await rpc('load_settings', { p_device_id: $('setDevice').value }); } catch (e) {}
+  const wifi = (s && s.wifi) || [];
+  for (let i = 0; i < 3; i++) {
+    $('wifiSsid' + i).value = wifi[i] ? wifi[i].ssid : '';
+    $('wifiPw' + i).value = '';
+    $('wifiPw' + i).placeholder = wifi[i] && wifi[i].has_password ? 'Saved (blank keeps it)' : 'Password';
+  }
+  if (s) {
+    (s.buttons || []).forEach(b => { if (b.button >= 1 && b.button <= 4) $('btnSp' + (b.button - 1)).value = b.fish_type_id; });
+    if (s.upload_interval_s) $('setInterval').value = s.upload_interval_s;
+    if (s.led_brightness !== undefined) $('setLed').value = s.led_brightness;
+    if (s.uploads_enabled !== undefined) $('setUploads').checked = s.uploads_enabled;
+  }
+  $('setMsg').textContent = '';
+}
+
+$('setDevice').onchange = loadDeviceSettings;
+
+$('saveSettings').onclick = async () => {
+  const wifi = [];
+  for (let i = 0; i < 3; i++) {
+    const ssid = $('wifiSsid' + i).value.trim();
+    if (ssid) wifi.push({ ssid, password: $('wifiPw' + i).value });
+  }
+  const buttons = [0, 1, 2, 3].map(i => {
+    const id = +$('btnSp' + i).value;
+    return { button: i + 1, species: SPECIES.find(s => s[0] === id)[1], fish_type_id: id };
+  });
+  const settings = {
+    version: 1,
+    profile_name: 'Default',
+    wifi, buttons,
+    upload_interval_s: Math.min(3600, Math.max(10, +$('setInterval').value || 30)),
+    uploads_enabled: $('setUploads').checked,
+    gps_max_age_ms: 5000,
+    debounce_ms: 30,
+    led_brightness: Math.min(100, Math.max(0, +$('setLed').value || 0))
+  };
+  $('saveSettings').disabled = true;
+  $('setMsg').textContent = 'Saving...';
+  try {
+    const res = await rpc('save_settings', { p_device_id: $('setDevice').value, p_settings: settings });
+    $('setMsg').textContent = res.ok ? 'Saved. The unit picks it up next time it connects.' : res.message;
+    if (res.ok) loadDeviceSettings();
+  } catch (e) { $('setMsg').textContent = e.message; }
+  $('saveSettings').disabled = false;
+};
   function start() {
   if (!session) { showLogin(); return; }
   $('login').hidden = true;
   $('who').textContent = (session.user && session.user.email) || '';
   loadAll(true);
+    loadDevices();
 }
 async function consumeEmailLink() {
   const h = new URLSearchParams(location.hash.slice(1));
