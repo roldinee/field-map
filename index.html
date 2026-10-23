@@ -97,8 +97,9 @@
   <div class="row"><input id="wifiSsid1" placeholder="Network name" style="flex:1"><input id="wifiPw1" type="password" autocomplete="new-password" style="flex:1"></div>
   <div class="row"><input id="wifiSsid2" placeholder="Network name" style="flex:1"><input id="wifiPw2" type="password" autocomplete="new-password" style="flex:1"></div>
   <div style="font-size:12px;margin-top:6px">Species for each button</div>
-  <div class="row"><label>1 <select id="btnSp0"></select></label><label>2 <select id="btnSp1"></select></label></div>
-  <div class="row"><label>3 <select id="btnSp2"></select></label><label>4 <select id="btnSp3"></select></label></div>
+<datalist id="speciesList"></datalist>
+<div class="row"><label style="flex:1">1 <input id="btnSp0" list="speciesList" maxlength="30" style="width:100%"></label><label style="flex:1">2 <input id="btnSp1" list="speciesList" maxlength="30" style="width:100%"></label></div>
+<div class="row"><label style="flex:1">3 <input id="btnSp2" list="speciesList" maxlength="30" style="width:100%"></label><label style="flex:1">4 <input id="btnSp3" list="speciesList" maxlength="30" style="width:100%"></label></div>
   <div class="row" style="margin-top:6px">
     <label>Upload every (s) <input id="setInterval" type="number" min="10" max="3600" value="30" style="width:70px"></label>
     <label>LED brightness <input id="setLed" type="number" min="0" max="100" value="50" style="width:60px"></label>
@@ -333,7 +334,7 @@ $('claimBtn').onclick = async () => {
   }
   $('claimBtn').disabled = false;
 };
-  const SPECIES = [[1,'Brown'],[2,'Rainbow'],[3,'Brook'],[4,'Cutthroat']];
+  
 
 async function rpc(name, body) {
   const call = () => fetch(`${SB_URL}/rest/v1/rpc/${name}`, {
@@ -347,17 +348,7 @@ async function rpc(name, body) {
   return r.json();
 }
 
-function fillSpecies() {
-  for (let i = 0; i < 4; i++) {
-    const sel = $('btnSp' + i);
-    sel.innerHTML = '';
-    SPECIES.forEach(([id, name]) => {
-      const o = document.createElement('option');
-      o.value = id; o.textContent = name; sel.appendChild(o);
-    });
-    sel.value = i + 1;
-  }
-}
+
 
 async function loadDevices() {
   const call = () => fetch(`${SB_URL}/rest/v1/devices?select=device_id,device_name&order=registered_at`, {
@@ -379,7 +370,45 @@ async function loadDevices() {
   if (list.length) loadDeviceSettings();
 }
 
+
+
+$('setDevice').onchange = loadDeviceSettings;
+
+
+  $('saveSettings').disabled = true;
+  $('setMsg').textContent = 'Saving...';
+  try {
+    const res = await rpc('save_settings', { p_device_id: $('setDevice').value, p_settings: settings });
+    $('setMsg').textContent = res.ok ? 'Saved. The unit picks it up next time it connects.' : res.message;
+    if (res.ok) loadDeviceSettings();
+  } catch (e) { $('setMsg').textContent = e.message; }
+  $('saveSettings').disabled = false;
+};
+  const DEFAULT_SP = ['Brown Trout', 'Rainbow Trout', 'Brook Trout', 'Cutthroat Trout'];
+const SHORT_SP = ['Brown', 'Rainbow', 'Brook', 'Cutthroat'];
+
+async function loadSpeciesList() {
+  const call = () => fetch(`${SB_URL}/rest/v1/mycopy_fish_types?select=species_of_fish&order=id`, {
+    headers: { apikey: SB_KEY, Authorization: 'Bearer ' + session.access_token }
+  });
+  let r = await call();
+  if (r.status === 401 && await refreshSession()) r = await call();
+  if (!r.ok) return;
+  const list = $('speciesList');
+  list.innerHTML = '';
+  (await r.json()).forEach(t => {
+    const o = document.createElement('option');
+    o.value = t.species_of_fish;
+    list.appendChild(o);
+  });
+}
+
+function fillSpecies() {
+  for (let i = 0; i < 4; i++) $('btnSp' + i).value = DEFAULT_SP[i];
+}
+
 async function loadDeviceSettings() {
+  await loadSpeciesList();
   fillSpecies();
   $('setInterval').value = 30; $('setLed').value = 50; $('setUploads').checked = true;
   let s = null;
@@ -391,7 +420,12 @@ async function loadDeviceSettings() {
     $('wifiPw' + i).placeholder = wifi[i] && wifi[i].has_password ? 'Saved (blank keeps it)' : 'Password';
   }
   if (s) {
-    (s.buttons || []).forEach(b => { if (b.button >= 1 && b.button <= 4) $('btnSp' + (b.button - 1)).value = b.fish_type_id; });
+    (s.buttons || []).forEach(b => {
+      if (b.button < 1 || b.button > 4) return;
+      let name = b.species || DEFAULT_SP[b.button - 1];
+      if (SHORT_SP.includes(name)) name += ' Trout';
+      $('btnSp' + (b.button - 1)).value = name;
+    });
     if (s.upload_interval_s) $('setInterval').value = s.upload_interval_s;
     if (s.led_brightness !== undefined) $('setLed').value = s.led_brightness;
     if (s.uploads_enabled !== undefined) $('setUploads').checked = s.uploads_enabled;
@@ -399,31 +433,31 @@ async function loadDeviceSettings() {
   $('setMsg').textContent = '';
 }
 
-$('setDevice').onchange = loadDeviceSettings;
-
 $('saveSettings').onclick = async () => {
-  const wifi = [];
-  for (let i = 0; i < 3; i++) {
-    const ssid = $('wifiSsid' + i).value.trim();
-    if (ssid) wifi.push({ ssid, password: $('wifiPw' + i).value });
-  }
-  const buttons = [0, 1, 2, 3].map(i => {
-    const id = +$('btnSp' + i).value;
-    return { button: i + 1, species: SPECIES.find(s => s[0] === id)[1], fish_type_id: id };
-  });
-  const settings = {
-    version: 1,
-    profile_name: 'Default',
-    wifi, buttons,
-    upload_interval_s: Math.min(3600, Math.max(10, +$('setInterval').value || 30)),
-    uploads_enabled: $('setUploads').checked,
-    gps_max_age_ms: 5000,
-    debounce_ms: 30,
-    led_brightness: Math.min(100, Math.max(0, +$('setLed').value || 0))
-  };
   $('saveSettings').disabled = true;
   $('setMsg').textContent = 'Saving...';
   try {
+    const wifi = [];
+    for (let i = 0; i < 3; i++) {
+      const ssid = $('wifiSsid' + i).value.trim();
+      if (ssid) wifi.push({ ssid, password: $('wifiPw' + i).value });
+    }
+    const buttons = [];
+    for (let i = 0; i < 4; i++) {
+      const sp = await rpc('add_species', { p_name: $('btnSp' + i).value });
+      if (!sp.ok) throw new Error('Button ' + (i + 1) + ': ' + sp.message);
+      buttons.push({ button: i + 1, species: sp.name, fish_type_id: sp.id });
+    }
+    const settings = {
+      version: 1,
+      profile_name: 'Default',
+      wifi, buttons,
+      upload_interval_s: Math.min(3600, Math.max(10, +$('setInterval').value || 30)),
+      uploads_enabled: $('setUploads').checked,
+      gps_max_age_ms: 5000,
+      debounce_ms: 30,
+      led_brightness: Math.min(100, Math.max(0, +$('setLed').value || 0))
+    };
     const res = await rpc('save_settings', { p_device_id: $('setDevice').value, p_settings: settings });
     $('setMsg').textContent = res.ok ? 'Saved. The unit picks it up next time it connects.' : res.message;
     if (res.ok) loadDeviceSettings();
