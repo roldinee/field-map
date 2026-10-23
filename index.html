@@ -84,6 +84,11 @@
     </div>
     <div class="row"><button id="reset">Reset filters</button><button id="refresh">Refresh data</button></div>
     <div id="userbar" class="empty" style="margin-top:8px;font-size:12px">Signed in as <b id="who"></b> · <button id="signout" style="padding:2px 8px;font-size:12px">Sign out</button></div>
+    <div class="row" style="margin-top:8px">
+  <input id="claimCode" placeholder="Device code" maxlength="20" autocomplete="off" style="flex:1">
+  <button id="claimBtn" type="button">Add device</button>
+</div>
+<div id="claimMsg" style="font-size:12px;margin-top:4px"></div>
   </header>
   <div class="scroll">
     <section class="cards">
@@ -277,7 +282,39 @@ function render(obs, fit) {
 $('reset').onclick = () => { $('species').value = ''; $('from').value = ''; $('to').value = ''; apply(true); };
 $('refresh').onclick = () => loadAll(false);
 
-function start() {
+async function claimDevice(code) {
+  const call = () => fetch(`${SB_URL}/rest/v1/rpc/claim_device`, {
+    method: 'POST',
+    headers: { apikey: SB_KEY, Authorization: 'Bearer ' + session.access_token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ p_code: code })
+  });
+  let r = await call();
+  if (r.status === 401 && await refreshSession()) r = await call();
+  if (!r.ok) throw new Error('Could not reach the server.');
+  return r.json();
+}
+
+$('claimBtn').onclick = async () => {
+  const code = $('claimCode').value.trim();
+  if (!code) { $('claimMsg').textContent = 'Enter the code printed on your device.'; return; }
+  $('claimBtn').disabled = true;
+  $('claimMsg').textContent = 'Checking...';
+  try {
+    const res = await claimDevice(code);
+    if (res.ok) {
+      $('claimCode').value = '';
+      $('claimMsg').textContent = 'Added ' + res.name + '. Loading its catches...';
+      await loadAll(true);
+      $('claimMsg').textContent = 'Added ' + res.name + '.';
+    } else {
+      $('claimMsg').textContent = res.message;
+    }
+  } catch (e) {
+    $('claimMsg').textContent = e.message;
+  }
+  $('claimBtn').disabled = false;
+};
+  function start() {
   if (!session) { showLogin(); return; }
   $('login').hidden = true;
   $('who').textContent = (session.user && session.user.email) || '';
