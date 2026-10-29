@@ -254,15 +254,31 @@ function columns(el, items) {
        <div class="axis"><span>${esc(items[0].label)}</span><span>${esc(items[items.length - 1].label)}</span></div>`
     : '<div class="empty">No data</div>';
 }
+  let markers = {};
+let hi = null;
+const locKey = o => o.lat.toFixed(5) + ',' + o.lng.toFixed(5);
+
+function highlight(o) {
+  if (hi) { map.removeLayer(hi); hi = null; }
+  if (!o) return;
+  hi = L.circleMarker([o.lat, o.lng], { radius: 16, color: '#ffd400', weight: 4, fill: false, interactive: false }).addTo(map);
+}
 
 function render(obs, fit) {
   layer.clearLayers();
-  for (const o of obs) {
-    L.circleMarker([o.lat, o.lng], { radius: 8, color: '#fff', weight: 1.5,
-      fillColor: colorOf(o.species), fillOpacity: 0.9 })
-      .bindPopup(`<strong>${esc(o.species)}</strong><br>${esc(fmt(o.observed_at))}<br>${o.lat.toFixed(5)}, ${o.lng.toFixed(5)}`)
-      .addTo(layer);
-  }
+  highlight(null);
+  markers = {};
+  const groups = {};
+  obs.forEach(o => { (groups[locKey(o)] = groups[locKey(o)] || []).push(o); });
+  Object.entries(groups).forEach(([k, g]) => {
+    const html = g.slice(0, 20).map(o =>
+      `<strong>${esc(o.species)}</strong><br>${esc(fmt(o.observed_at))}`).join('<hr>') +
+      (g.length > 1 ? `<hr><small>${g.length} catches at this spot</small>` : '');
+    markers[k] = L.circleMarker([g[0].lat, g[0].lng], {
+      radius: g.length > 1 ? 11 : 8, color: '#fff', weight: 1.5,
+      fillColor: colorOf(g[0].species), fillOpacity: 0.9 })
+      .bindPopup(html).addTo(layer).on('click', () => highlight(g[0]));
+  });
 
   const times = obs.map(o => new Date(o.observed_at).getTime());
   const counts = {};
@@ -290,8 +306,12 @@ function render(obs, fit) {
   $('list').innerHTML = obs.slice(0, 50).map((o, i) =>
     `<li data-i="${i}"><i class="sw" style="background:${colorOf(o.species)}"></i>${esc(o.species)}<small>${esc(fmt(o.observed_at))}</small></li>`).join('')
     || '<li class="empty">Nothing to show.</li>';
-  document.querySelectorAll('#list li[data-i]').forEach(li => li.onclick = () => {
-    const o = obs[li.dataset.i]; map.flyTo([o.lat, o.lng], 16);
+   document.querySelectorAll('#list li[data-i]').forEach(li => li.onclick = () => {
+    const o = obs[li.dataset.i];
+    map.flyTo([o.lat, o.lng], 16);
+    highlight(o);
+    const m = markers[locKey(o)];
+    if (m) setTimeout(() => m.openPopup(), 700);
   });
 
   if (fit && obs.length) map.fitBounds(obs.map(o => [o.lat, o.lng]), { padding: [40, 40], maxZoom: 16 });
