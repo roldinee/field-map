@@ -1,4 +1,4 @@
-  <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -85,29 +85,29 @@
     <div class="row"><button id="reset">Reset filters</button><button id="refresh">Refresh data</button></div>
     <div id="userbar" class="empty" style="margin-top:8px;font-size:12px">Signed in as <b id="who"></b> · <button id="signout" style="padding:2px 8px;font-size:12px">Sign out</button></div>
     <div class="row" style="margin-top:8px">
-  <input id="claimCode" placeholder="Device code" maxlength="20" autocomplete="off" style="flex:1">
-  <button id="claimBtn" type="button">Add device</button>
-</div>
-<div id="claimMsg" style="font-size:12px;margin-top:4px"></div>
+      <input id="claimCode" placeholder="Device code" maxlength="20" autocomplete="off" style="flex:1">
+      <button id="claimBtn" type="button">Add device</button>
+    </div>
+    <div id="claimMsg" style="font-size:12px;margin-top:4px"></div>
     <details id="settingsBox" style="margin-top:10px" hidden>
-  <summary>Device settings</summary>
-  <select id="setDevice" style="width:100%;margin:6px 0"></select>
-  <div style="font-size:12px">Wi-Fi networks (tried in order)</div>
-  <div class="row"><input id="wifiSsid0" placeholder="Network name" style="flex:1"><input id="wifiPw0" type="password" autocomplete="new-password" style="flex:1"></div>
-  <div class="row"><input id="wifiSsid1" placeholder="Network name" style="flex:1"><input id="wifiPw1" type="password" autocomplete="new-password" style="flex:1"></div>
-  <div class="row"><input id="wifiSsid2" placeholder="Network name" style="flex:1"><input id="wifiPw2" type="password" autocomplete="new-password" style="flex:1"></div>
-  <div style="font-size:12px;margin-top:6px">Species for each button</div>
-<datalist id="speciesList"></datalist>
-<div class="row"><label style="flex:1">1 <input id="btnSp0" list="speciesList" maxlength="30" style="width:100%"></label><label style="flex:1">2 <input id="btnSp1" list="speciesList" maxlength="30" style="width:100%"></label></div>
-<div class="row"><label style="flex:1">3 <input id="btnSp2" list="speciesList" maxlength="30" style="width:100%"></label><label style="flex:1">4 <input id="btnSp3" list="speciesList" maxlength="30" style="width:100%"></label></div>
-  <div class="row" style="margin-top:6px">
-    <label>Upload every (s) <input id="setInterval" type="number" min="10" max="3600" value="30" style="width:70px"></label>
-    <label>LED brightness <input id="setLed" type="number" min="0" max="100" value="50" style="width:60px"></label>
-  </div>
-  <label style="display:block;margin-top:6px"><input id="setUploads" type="checkbox" checked> Uploads enabled</label>
-  <button id="saveSettings" type="button" style="margin-top:6px">Save settings</button>
-  <div id="setMsg" style="font-size:12px;margin-top:4px"></div>
-</details>
+      <summary>Device settings</summary>
+      <select id="setDevice" style="width:100%;margin:6px 0"></select>
+      <div style="font-size:12px">Wi-Fi networks (tried in order)</div>
+      <div class="row"><input id="wifiSsid0" placeholder="Network name" style="flex:1;min-width:0"><input id="wifiPw0" type="password" placeholder="Password" autocomplete="new-password" style="flex:1;min-width:0"></div>
+      <div class="row"><input id="wifiSsid1" placeholder="Network name" style="flex:1;min-width:0"><input id="wifiPw1" type="password" placeholder="Password" autocomplete="new-password" style="flex:1;min-width:0"></div>
+      <div class="row"><input id="wifiSsid2" placeholder="Network name" style="flex:1;min-width:0"><input id="wifiPw2" type="password" placeholder="Password" autocomplete="new-password" style="flex:1;min-width:0"></div>
+      <div style="font-size:12px;margin-top:6px">Species for each button</div>
+      <datalist id="speciesList"></datalist>
+      <div class="row"><label style="flex:1">1 <input id="btnSp0" list="speciesList" maxlength="30" style="width:100%"></label><label style="flex:1">2 <input id="btnSp1" list="speciesList" maxlength="30" style="width:100%"></label></div>
+      <div class="row"><label style="flex:1">3 <input id="btnSp2" list="speciesList" maxlength="30" style="width:100%"></label><label style="flex:1">4 <input id="btnSp3" list="speciesList" maxlength="30" style="width:100%"></label></div>
+      <div class="row" style="margin-top:6px">
+        <label>Upload every (s) <input id="setInterval" type="number" min="10" max="3600" value="30" style="width:70px"></label>
+        <label>LED brightness <input id="setLed" type="number" min="0" max="100" value="50" style="width:60px"></label>
+      </div>
+      <label style="display:block;margin-top:6px"><input id="setUploads" type="checkbox" checked> Uploads enabled</label>
+      <button id="saveSettings" type="button" style="margin-top:6px">Save settings</button>
+      <div id="setMsg" style="font-size:12px;margin-top:4px"></div>
+    </details>
   </header>
   <div class="scroll">
     <section class="cards">
@@ -130,6 +130,7 @@ const SB_URL = 'https://oqmdykrkbfdvvufgazsm.supabase.co';
 const SB_KEY = 'sb_publishable_FRTm-YVmfGFomzD9w5MdZg_iSW_wjRr';
 const TABLE = 'public_points';      // a view that the database limits to the signed-in user
 const ALLOW_SIGNUP = true;          // false hides the "Create account" button
+const LOC_DECIMALS = 5;             // catches whose coordinates match to this many decimals share one dot (4 = about 10 m)
 // ====================================================================
 
 const map = L.map('map').setView([40.015, -105.27], 11);   // change to your area
@@ -146,6 +147,24 @@ let colors = {};
 const colorOf = s => colors[s] || '#888';
 const fmt = t => new Date(t).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
 const day = t => new Date(t).toLocaleDateString('en-CA');   // YYYY-MM-DD, local time
+
+// ---------- map highlight ----------
+let markers = {};
+let hi = null;
+let popOpen = false;
+const locKey = o => o.lat.toFixed(LOC_DECIMALS) + ',' + o.lng.toFixed(LOC_DECIMALS);
+
+function highlight(o) {
+  if (hi) { map.removeLayer(hi); hi = null; }
+  if (!o) return;
+  hi = L.circleMarker([o.lat, o.lng], { radius: 16, color: '#ffd400', weight: 4, fill: false, interactive: false }).addTo(map);
+}
+// remove the ring only when no popup is open afterwards (switching popups must keep it)
+map.on('popupopen', () => { popOpen = true; });
+map.on('popupclose', () => {
+  popOpen = false;
+  setTimeout(() => { if (!popOpen) highlight(null); }, 0);
+});
 
 // ---------- accounts (Supabase Auth over plain fetch) ----------
 let session = null;                                   // { access_token, refresh_token, user }
@@ -254,25 +273,19 @@ function columns(el, items) {
        <div class="axis"><span>${esc(items[0].label)}</span><span>${esc(items[items.length - 1].label)}</span></div>`
     : '<div class="empty">No data</div>';
 }
-  let markers = {};
-let hi = null;
-const locKey = o => o.lat.toFixed(5) + ',' + o.lng.toFixed(5);
-
-function highlight(o) {
-  if (hi) { map.removeLayer(hi); hi = null; }
-  if (!o) return;
-  hi = L.circleMarker([o.lat, o.lng], { radius: 16, color: '#ffd400', weight: 4, fill: false, interactive: false }).addTo(map);
-}
 
 function render(obs, fit) {
   layer.clearLayers();
   highlight(null);
   markers = {};
+
+  // one dot per spot; popup lists every catch there
   const groups = {};
   obs.forEach(o => { (groups[locKey(o)] = groups[locKey(o)] || []).push(o); });
   Object.entries(groups).forEach(([k, g]) => {
     const html = g.slice(0, 20).map(o =>
       `<strong>${esc(o.species)}</strong><br>${esc(fmt(o.observed_at))}`).join('<hr>') +
+      (g.length > 20 ? `<hr><small>and ${g.length - 20} more</small>` : '') +
       (g.length > 1 ? `<hr><small>${g.length} catches at this spot</small>` : '');
     markers[k] = L.circleMarker([g[0].lat, g[0].lng], {
       radius: g.length > 1 ? 11 : 8, color: '#fff', weight: 1.5,
@@ -306,12 +319,22 @@ function render(obs, fit) {
   $('list').innerHTML = obs.slice(0, 50).map((o, i) =>
     `<li data-i="${i}"><i class="sw" style="background:${colorOf(o.species)}"></i>${esc(o.species)}<small>${esc(fmt(o.observed_at))}</small></li>`).join('')
     || '<li class="empty">Nothing to show.</li>';
-   document.querySelectorAll('#list li[data-i]').forEach(li => li.onclick = () => {
+
+  // click a catch in the list: fly there, ring it, and open that catch's own popup
+  document.querySelectorAll('#list li[data-i]').forEach(li => li.onclick = () => {
     const o = obs[li.dataset.i];
+    const others = obs.filter(x => x !== o && locKey(x) === locKey(o)).length;
+    const html =
+      `<strong>${esc(o.species)}</strong><br>` +
+      `${esc(fmt(o.observed_at))}<br>` +
+      `${o.lat.toFixed(5)}, ${o.lng.toFixed(5)}` +
+      (others ? `<hr><small>${others} other catch${others > 1 ? 'es' : ''} at this spot</small>` : '');
     map.flyTo([o.lat, o.lng], 16);
+    L.popup({ autoPan: false, offset: [0, -10] })
+      .setLatLng([o.lat, o.lng])
+      .setContent(html)
+      .openOn(map);
     highlight(o);
-    const m = markers[locKey(o)];
-    if (m) setTimeout(() => m.openPopup(), 700);
   });
 
   if (fit && obs.length) map.fitBounds(obs.map(o => [o.lat, o.lng]), { padding: [40, 40], maxZoom: 16 });
