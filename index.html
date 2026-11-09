@@ -83,6 +83,8 @@
       <input type="date" id="to" aria-label="To date">
     </div>
     <div class="row"><button id="reset">Reset filters</button><button id="refresh">Refresh data</button></div>
+    <label style="display:block;margin-top:8px;font-size:12px"><input id="showPressure" type="checkbox"> Show fishing pressure
+  <span style="color:#3aa655">■ light</span> <span style="color:#f2c230">■ moderate</span> <span style="color:#d1342f">■ heavy</span></label>
     <div id="userbar" class="empty" style="margin-top:8px;font-size:12px">Signed in as <b id="who"></b> · <button id="signout" style="padding:2px 8px;font-size:12px">Sign out</button></div>
     <div class="row" style="margin-top:8px">
       <input id="claimCode" placeholder="Device code" maxlength="20" autocomplete="off" style="flex:1">
@@ -484,7 +486,33 @@ $('saveSettings').onclick = async () => {
   $('saveSettings').disabled = false;
 };
 
-// ---------- start ----------
+// ---------- fishing pressure layer ----------
+map.createPane('pressure');
+map.getPane('pressure').style.zIndex = 350;      // below your own dots
+const pressureLayer = L.layerGroup();
+const LEVELS = {
+  green:  ['#3aa655', 'Light fishing activity'],
+  yellow: ['#f2c230', 'Moderate fishing activity'],
+  red:    ['#d1342f', 'Heavy fishing activity']
+};
+async function loadPressure() {
+  pressureLayer.clearLayers();
+  try {
+    const cells = await rpc('pressure_cells', { p_days: 365 });
+    if (!Array.isArray(cells)) return;
+    cells.forEach(c => {
+      const [color, label] = LEVELS[c.level] || LEVELS.green;
+      L.rectangle([[c.cell_lat - 0.005, c.cell_lng - 0.005], [c.cell_lat + 0.005, c.cell_lng + 0.005]],
+        { pane: 'pressure', stroke: false, fillColor: color, fillOpacity: 0.45 })
+        .bindTooltip(label + ' (last year)').addTo(pressureLayer);
+    });
+  } catch (e) { console.error(e); }
+}
+$('showPressure').onchange = async () => {
+  if ($('showPressure').checked) { await loadPressure(); pressureLayer.addTo(map); }
+  else pressureLayer.remove();
+};
+  // ---------- start ----------
 function start() {
   if (!session) { showLogin(); return; }
   $('login').hidden = true;
