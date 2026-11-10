@@ -169,10 +169,76 @@ map.on('popupclose', () => {
   setTimeout(() => { if (!popOpen) highlight(null); }, 0);
 });
 
-// ---------- fishing pressure layer (declared early so showLogin can clear it) ----------
+// ---------- fishing pressure layer: smooth, fading heat surface ----------
 map.createPane('pressure');
 map.getPane('pressure').style.zIndex = 350;      // below your own dots
-const pressureLayer = L.layerGroup();
+
+function pressureColor(t) {                       // 0 = violet, 0.5 = green, 1 = red
+  return `hsl(${Math.round(270 - 270 * t)}, 80%, 48%)`;
+}
+function hslToRgb(h, s, l) {                      // h 0-360, s and l 0-1
+  const k = n => (n + h / 30) % 12, a = s * Math.min(l, 1 - l);
+  const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  return [Math.round(f(0) * 255), Math.round(f(8) * 255), Math.round(f(4) * 255)];
+}
+
+const PressureLayer = L.Layer.extend({
+  initialize() { this.cells = []; },
+  onAdd(m) {
+    this._canvas = L.DomUtil.create('canvas', 'leaflet-zoom-hide');
+    this._canvas.style.pointerEvents = 'none';
+    m.getPane('pressure').appendChild(this._canvas);
+    m.on('moveend zoomend resize', this._redraw, this);
+    this._redraw();
+  },
+  onRemove(m) {
+    m.off('moveend zoomend resize', this._redraw, this);
+    L.DomUtil.remove(this._canvas);
+  },
+  setCells(c) { this.cells = c; this._redraw(); },
+  clearLayers() { this.setCells([]); },
+  _redraw() {
+    const m = this._map; if (!m || !this._canvas) return;
+    const size = m.getSize(), pad = 0.25;
+    const w = Math.round(size.x * (1 + 2 * pad)), h = Math.round(size.y * (1 + 2 * pad));
+    const origin = L.point(-size.x * pad, -size.y * pad);
+    const cv = this._canvas; cv.width = w; cv.height = h;
+    L.DomUtil.setPosition(cv, m.containerPointToLayerPoint(origin));
+    const ctx = cv.getContext('2d'); ctx.clearRect(0, 0, w, h);
+    if (!this.cells.length) return;
+
+    // how big is one 0.01 degree square on screen right now
+    const c0 = this.cells[0], p0 = m.latLngToContainerPoint([c0.lat, c0.lng]);
+    const sx = Math.max(4, Math.abs(m.latLngToContainerPoint([c0.lat, c0.lng + 0.01]).x - p0.x) * 0.5);
+    const sy = Math.max(4, Math.abs(m.latLngToContainerPoint([c0.lat + 0.01, c0.lng]).y - p0.y) * 0.5);
+    const pts = this.cells.map(c => {
+      const p = m.latLngToContainerPoint([c.lat, c.lng]);
+      return { x: p.x - origin.x, y: p.y - origin.y, t: c.t };
+    });
+
+    const step = 5, gw = Math.ceil(w / step), gh = Math.ceil(h / step);
+    const small = document.createElement('canvas'); small.width = gw; small.height = gh;
+    const sctx = small.getContext('2d'), img = sctx.createImageData(gw, gh);
+    for (let gy = 0; gy < gh; gy++) for (let gx = 0; gx < gw; gx++) {
+      const x = gx * step + step / 2, y = gy * step + step / 2;
+      let sw = 0, swt = 0;
+      for (const p of pts) {
+        const dx = (x - p.x) / sx, dy = (y - p.y) / sy, d2 = dx * dx + dy * dy;
+        if (d2 > 9) continue;
+        const wt = Math.exp(-d2 / 2); sw += wt; swt += wt * p.t;
+      }
+      if (sw < 0.02) continue;
+      const [r, g, b] = hslToRgb(270 - 270 * (swt / sw), 0.8, 0.48);
+      const i = (gy * gw + gx) * 4;
+      img.data[i] = r; img.data[i + 1] = g; img.data[i + 2] = b;
+      img.data[i + 3] = Math.round(Math.min(1, sw) * 0.55 * 255);
+    }
+    sctx.putImageData(img, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(small, 0, 0, gw * step, gh * step);   // scaling up smooths it
+  }
+});
+const pressureLayer = new PressureLayer();
 
 // ---------- accounts (Supabase Auth over plain fetch) ----------
 let session = null;                                   // { access_token, refresh_token, user }
@@ -198,7 +264,7 @@ function showLogin(msg, ok) {
   $('loginMsg').textContent = msg || '';
   $('loginMsg').className = ok ? 'ok' : '';
   ALL = []; render([], false);                        // clear anything still on screen
-  pressureLayer.clearLayers();                        // and the pressure squares
+  pressureLayer.clearLayers();                        // and the pressure surface
 }
 
 $('signup').style.display = ALLOW_SIGNUP ? '' : 'none';
@@ -494,22 +560,14 @@ $('saveSettings').onclick = async () => {
   $('saveSettings').disabled = false;
 };
 
-// ---------- fishing pressure layer ----------
-function pressureColor(t) {                       // 0 = violet, 0.5 = green, 1 = red
-  return `hsl(${Math.round(270 - 270 * t)}, 80%, 48%)`;
-}
+// ---------- fishing pressure data ----------
 async function loadPressure() {
-  pressureLayer.clearLayers();
   try {
     const cells = await rpc('pressure_cells', { p_days: 730 });
     if (!Array.isArray(cells)) return;
-    cells.forEach(c => {
-      const t = Math.min(1, Math.max(0, c.intensity));
-      const label = t < 0.34 ? 'Lower' : t < 0.67 ? 'Moderate' : 'Highest';
-      L.rectangle([[c.cell_lat - 0.005, c.cell_lng - 0.005], [c.cell_lat + 0.005, c.cell_lng + 0.005]],
-        { pane: 'pressure', stroke: false, fillColor: pressureColor(t), fillOpacity: 0.5 })
-        .bindTooltip(label + ' fishing activity (last 2 years)').addTo(pressureLayer);
-    });
+    pressureLayer.setCells(cells.map(c => ({
+      lat: c.cell_lat, lng: c.cell_lng, t: Math.min(1, Math.max(0, c.intensity))
+    })));
   } catch (e) { console.error(e); }
 }
 async function showPressure() {
