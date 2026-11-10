@@ -84,7 +84,7 @@
     </div>
     <div class="row"><button id="reset">Reset filters</button><button id="refresh">Refresh data</button></div>
     <label style="display:block;margin-top:8px;font-size:12px"><input id="showPressure" type="checkbox" checked> Show fishing pressure
-      <span style="display:block;height:8px;margin-top:4px;border-radius:4px;background:linear-gradient(to right,hsl(120,75%,45%),hsl(60,75%,45%),hsl(0,75%,45%))"></span>
+      <span style="display:block;height:8px;margin-top:4px;border-radius:4px;background:linear-gradient(to right,hsl(270,80%,48%),hsl(225,80%,48%),hsl(180,80%,48%),hsl(135,80%,48%),hsl(90,80%,48%),hsl(45,80%,48%),hsl(0,80%,48%))"></span>
       <span style="display:flex;justify-content:space-between;color:var(--muted)"><span>lower</span><span>highest</span></span></label>
     <div id="userbar" class="empty" style="margin-top:8px;font-size:12px">Signed in as <b id="who"></b> · <button id="signout" style="padding:2px 8px;font-size:12px">Sign out</button></div>
     <div class="row" style="margin-top:8px">
@@ -495,8 +495,8 @@ $('saveSettings').onclick = async () => {
 };
 
 // ---------- fishing pressure layer ----------
-function pressureColor(t) {                       // 0 = green, 0.5 = yellow, 1 = red
-  return `hsl(${Math.round(120 - 120 * t)}, 75%, 45%)`;
+function pressureColor(t) {                       // 0 = violet, 0.5 = green, 1 = red
+  return `hsl(${Math.round(270 - 270 * t)}, 80%, 48%)`;
 }
 async function loadPressure() {
   pressureLayer.clearLayers();
