@@ -83,7 +83,7 @@
       <input type="date" id="to" aria-label="To date">
     </div>
     <div class="row"><button id="reset">Reset filters</button><button id="refresh">Refresh data</button></div>
-    <label style="display:block;margin-top:8px;font-size:12px"><input id="showPressure" type="checkbox"> Show fishing pressure
+    <label style="display:block;margin-top:8px;font-size:12px"><input id="showPressure" type="checkbox" checked> Show fishing pressure
   <span style="color:#3aa655">■ light</span> <span style="color:#f2c230">■ moderate</span> <span style="color:#d1342f">■ heavy</span></label>
     <div id="userbar" class="empty" style="margin-top:8px;font-size:12px">Signed in as <b id="who"></b> · <button id="signout" style="padding:2px 8px;font-size:12px">Sign out</button></div>
     <div class="row" style="margin-top:8px">
@@ -192,6 +192,7 @@ function showLogin(msg, ok) {
   $('loginMsg').textContent = msg || '';
   $('loginMsg').className = ok ? 'ok' : '';
   ALL = []; render([], false);                        // clear anything still on screen
+  pressureLayer.clearLayers();                        // and the pressure squares
 }
 
 $('signup').style.display = ALLOW_SIGNUP ? '' : 'none';
@@ -344,7 +345,7 @@ function render(obs, fit) {
 
 ['species', 'from', 'to'].forEach(id => $(id).addEventListener('change', () => apply(true)));
 $('reset').onclick = () => { $('species').value = ''; $('from').value = ''; $('to').value = ''; apply(true); };
-$('refresh').onclick = () => loadAll(false);
+$('refresh').onclick = () => { loadAll(false); showPressure(); };
 
 // ---------- generic database function call ----------
 async function rpc(name, body) {
@@ -372,6 +373,7 @@ $('claimBtn').onclick = async () => {
       $('claimMsg').textContent = 'Added ' + res.name + '. Loading its catches...';
       await loadAll(true);
       loadDevices();
+      showPressure();
       $('claimMsg').textContent = 'Added ' + res.name + '.';
     } else {
       $('claimMsg').textContent = res.message;
@@ -508,17 +510,23 @@ async function loadPressure() {
     });
   } catch (e) { console.error(e); }
 }
-$('showPressure').onchange = async () => {
-  if ($('showPressure').checked) { await loadPressure(); pressureLayer.addTo(map); }
+async function showPressure() {
+  await loadPressure();
+  if ($('showPressure').checked) pressureLayer.addTo(map);
+}
+$('showPressure').onchange = () => {
+  if ($('showPressure').checked) pressureLayer.addTo(map);
   else pressureLayer.remove();
 };
-  // ---------- start ----------
+
+// ---------- start ----------
 function start() {
   if (!session) { showLogin(); return; }
   $('login').hidden = true;
   $('who').textContent = (session.user && session.user.email) || '';
   loadAll(true);
   loadDevices();
+  showPressure();
 }
 
 async function consumeEmailLink() {
