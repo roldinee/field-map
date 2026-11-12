@@ -147,6 +147,8 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
   ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const PALETTE = ['#e4572e','#2e86ab','#76b041','#f2a541','#8e5bd9','#17bebb','#d1495b','#6b705c'];
 let colors = {};
+  const SPECIES_ORDER = ['Brown Trout', 'Rainbow Trout', 'Brook Trout', 'Cutthroat Trout'];
+const speciesRank = s => { const i = SPECIES_ORDER.indexOf(s); return i < 0 ? 99 : i; };
 const colorOf = s => colors[s] || '#888';
 const fmt = t => new Date(t).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
 const day = t => new Date(t).toLocaleDateString('en-CA');   // YYYY-MM-DD, local time
