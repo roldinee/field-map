@@ -145,11 +145,20 @@ const layer = L.layerGroup().addTo(map);
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
   ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+// ---------- species order and colors ----------
 const PALETTE = ['#e4572e','#2e86ab','#76b041','#f2a541','#8e5bd9','#17bebb','#d1495b','#6b705c'];
-let colors = {};
-  const SPECIES_ORDER = ['Brown Trout', 'Rainbow Trout', 'Brook Trout', 'Cutthroat Trout'];
+const SPECIES_ORDER = ['Brown Trout', 'Rainbow Trout', 'Brook Trout', 'Cutthroat Trout'];
+const SPECIES_COLORS = {
+  'Brown Trout':     '#8b5a2b',
+  'Rainbow Trout':   '#2e86ab',
+  'Brook Trout':     '#f2a541',
+  'Cutthroat Trout': '#e4572e'
+};
 const speciesRank = s => { const i = SPECIES_ORDER.indexOf(s); return i < 0 ? 99 : i; };
+let colors = {};
 const colorOf = s => colors[s] || '#888';
+
 const fmt = t => new Date(t).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
 const day = t => new Date(t).toLocaleDateString('en-CA');   // YYYY-MM-DD, local time
 
@@ -175,9 +184,6 @@ map.on('popupclose', () => {
 map.createPane('pressure');
 map.getPane('pressure').style.zIndex = 350;      // below your own dots
 
-function pressureColor(t) {                       // 0 = violet, 0.5 = green, 1 = red
-  return `hsl(${Math.round(270 - 270 * t)}, 80%, 48%)`;
-}
 function hslToRgb(h, s, l) {                      // h 0-360, s and l 0-1
   const k = n => (n + h / 30) % 12, a = s * Math.min(l, 1 - l);
   const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
@@ -324,9 +330,10 @@ async function loadAll(fit) {
   }
   const counts = {};
   ALL.forEach(o => counts[o.species] = (counts[o.species] || 0) + 1);
-  const names = Object.keys(counts).sort((a, b) => counts[b] - counts[a] || a.localeCompare(b));
+  const names = Object.keys(counts).sort((a, b) => speciesRank(a) - speciesRank(b) || a.localeCompare(b));
   colors = {};
-  names.forEach((s, i) => colors[s] = PALETTE[i % PALETTE.length]);
+  let extra = 0;
+  names.forEach(s => colors[s] = SPECIES_COLORS[s] || PALETTE[(4 + extra++) % PALETTE.length]);
   const keep = $('species').value;
   $('species').innerHTML = '<option value="">All species</option>' +
     names.map(s => `<option value="${esc(s)}">${esc(s)} (${counts[s]})</option>`).join('');
@@ -379,8 +386,8 @@ function render(obs, fit) {
     ? (day(Math.min(...times)) === day(Math.max(...times)) ? day(times[0]) : day(Math.min(...times)).slice(5) + ' → ' + day(Math.max(...times)).slice(5))
     : '–';
 
-  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-  const top = sorted.length ? sorted[0][1] : 1;
+  const sorted = Object.entries(counts).sort((a, b) => speciesRank(a[0]) - speciesRank(b[0]) || a[0].localeCompare(b[0]));
+  const top = sorted.length ? Math.max(...sorted.map(x => x[1])) : 1;
   $('bySpecies').innerHTML = sorted.length ? sorted.map(([s, n]) =>
     `<button class="sp" data-s="${esc(s)}"><i class="sw" style="background:${colorOf(s)}"></i>
      <span class="name" title="${esc(s)}">${esc(s)}</span><span class="bar"><i style="width:${n / top * 100}%;background:${colorOf(s)}"></i></span><b>${n}</b></button>`).join('')
